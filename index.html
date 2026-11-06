@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>特殊手じゃんけん</title>
+<title>極ジャン</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
@@ -90,7 +90,7 @@ details summary{cursor:pointer;font-weight:700}
 </style>
 </head>
 <body>
-<main id="app"><header><h1>特殊手<span>じゃんけん</span></h1></header><div class="card"><p class="dim">準備しています…</p></div></main>
+<main id="app"><header><h1>極<span>ジャン</span></h1></header><div class="card"><p class="dim">準備しています…</p></div></main>
 
 <script type="module">
 /* ================================================================
@@ -356,8 +356,8 @@ const actions = {
   cancelName(){ S.editingName = false; render(); },
   async saveName(){
     const name=(drafts.newName||"").trim();
-    if(!name) return setErr("名前を入れてね。");
-    if(name.length>12) return setErr("名前は12文字までにしてね。");
+    if(!name) return setErr("ユーザー名を入れてね。");
+    if(name.length>12) return setErr("ユーザー名は12文字までにしてね。");
     try{
       const data = {name, updatedAt:Date.now()};
       if(!profile) data.createdAt = Date.now();
@@ -395,7 +395,7 @@ function render(){
 }
 
 function view(){
-  let h=`<header><h1>特殊手<span>じゃんけん</span></h1>${S.code&&S.game?`<div class="row"><span class="chip">部屋 ${esc(S.code)}</span><button class="btn small" data-act="leave">ロビーにもどる</button></div>`:""}</header>`;
+  let h=`<header><h1>極<span>ジャン</span></h1>${S.code&&S.game?`<div class="row"><span class="chip">部屋 ${esc(S.code)}</span><button class="btn small" data-act="leave">ロビーにもどる</button></div>`:""}</header>`;
   if(S.err) h+=`<div class="note err row" role="alert"><span style="flex:1">${esc(S.err)}</span><button class="btn small" data-act="dismiss">とじる</button></div>`;
   if(S.busy) h+=`<div class="note pulse">${esc(S.busy)}</div>`;
   if(setupMissing) return h+`<div class="card"><h2>設定がまだです</h2><p>このファイルの上のほうにある <code>firebaseConfig</code> に、Firebaseの設定を貼り付けてね。</p></div>`;
@@ -414,22 +414,17 @@ function view(){
 }
 
 function viewLogin(){
-  return `<div class="card"><h2>ログイン</h2>
-    <p>特殊手じゃんけんで遊ぶには、Googleアカウントでログインしてね。</p>
-    <div class="row"><button class="btn primary" data-act="login">Googleでログイン</button></div>
-    <p class="dim">LINEやInstagramの中で開いているとログインできないことがあります。そのときはSafariやChromeで開き直してね。</p></div>`;
+  return `<div class="card"><div class="row" style="justify-content:center"><button class="btn primary" data-act="login">ログイン</button></div></div>`;
 }
 function viewName(){
-  const first = !profile;
-  return `<div class="card"><h2>${first?"アカウントを作る":"名前を変える"}</h2>
-    <p>${first?"ゲームの中でみんなに表示される名前を決めてね。あとから変えられます。":"新しい名前を入れてね。"}</p>
-    <label for="newName">名前（12文字まで）</label>
+  return `<div class="card">
+    <label for="newName">ユーザー名</label>
     <input id="newName" data-draft maxlength="12" value="${esc(drafts.newName||"")}" autocomplete="off">
-    <div class="row"><button class="btn primary" data-act="saveName">${first?"この名前で始める":"保存"}</button>${first?`<button class="btn small" data-act="logout">別のアカウントにする</button>`:`<button class="btn small" data-act="cancelName">やめる</button>`}</div></div>`;
+    <div class="row"><button class="btn primary" data-act="saveName">確定</button></div></div>`;
 }
 
 function viewLobby(){
-  let h=`<div class="card"><div class="row" style="justify-content:space-between"><span>ログイン中：<b>${esc(myName())}</b></span><span class="row"><button class="btn small" data-act="editName">名前を変える</button><button class="btn small" data-act="logout">ログアウト</button></span></div></div>
+  let h=`<div class="card"><div class="row" style="justify-content:space-between"><span>ログイン中：<b>${esc(myName())}</b></span><span class="row"><button class="btn small" data-act="editName">ユーザー名を変える</button><button class="btn small" data-act="logout">ログアウト</button></span></div></div>
   <div class="card"><h2>部屋を作る</h2>
     <div class="row"><label for="limitMin">特殊手を考える時間</label><input id="limitMin" data-draft type="number" min="0.5" max="30" step="0.5" value="${esc(drafts.limitMin||"3")}"><span>分</span></div>
     <div class="row"><button class="btn primary" data-act="create">部屋を作る</button></div></div>
