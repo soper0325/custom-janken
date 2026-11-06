@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>特殊手じゃんけん</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --board:#1c332e; --board-2:#23413a; --board-3:#2c5147;
+  --chalk:#f2efe4; --dim:#a8bab0; --yellow:#f1d35a; --pink:#f0a0b5; --sky:#9fd0e8;
+  --line:rgba(242,239,228,.22);
+  --display:"Dela Gothic One","Hiragino Sans","Noto Sans JP",sans-serif;
+  --body:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--board);color:var(--chalk);font-family:var(--body);font-weight:500;line-height:1.6}
+main{max-width:600px;margin:0 auto;padding:20px 16px 56px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:400;font-size:26px;margin:0;letter-spacing:.03em}
+h1 span{color:var(--yellow)}
+h2{font-family:var(--display);font-weight:400;font-size:18px;margin:0;color:var(--yellow)}
+h3{font-size:15px;margin:0;font-weight:700}
+p{margin:0}
+.dim{color:var(--dim);font-size:14px}
+.card{background:var(--board-2);border:1.5px dashed var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row > input{flex:1 1 150px}
+.btn{font:inherit;font-weight:700;font-size:15px;border:2px solid var(--chalk);background:transparent;color:var(--chalk);border-radius:10px;padding:9px 14px;cursor:pointer;line-height:1.3}
+.btn:hover:not(:disabled){background:rgba(242,239,228,.08)}
+.btn.primary{background:var(--yellow);border-color:var(--yellow);color:#1c2a25}
+.btn.small{font-size:13px;padding:6px 10px;border-width:1.5px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible,textarea:focus-visible,.hand:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+input,textarea{font:inherit;font-size:16px;background:var(--board);color:var(--chalk);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input[type=number]{width:90px}
+input[type=radio]{width:auto}
+textarea{min-height:120px;resize:vertical}
+label{font-weight:700;font-size:14px}
+.code{font-family:var(--display);font-size:30px;letter-spacing:.18em;color:var(--yellow)}
+.chip{display:inline-block;border:1.5px solid var(--line);border-radius:999px;padding:2px 10px;font-size:13px;color:var(--dim);white-space:nowrap}
+.chip.ok{border-color:var(--yellow);color:var(--yellow)}
+.chip.wait{border-color:var(--sky);color:var(--sky)}
+.note{border-left:4px solid var(--sky);padding:8px 12px;background:rgba(159,208,232,.08);border-radius:0 10px 10px 0;font-size:14px}
+.note.err{border-color:var(--pink);background:rgba(240,160,181,.1)}
+.seat{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px}
+.room{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px}
+.room b{font-family:var(--display);font-weight:400;letter-spacing:.12em;color:var(--yellow)}
+.timer{font-family:var(--display);font-size:40px;text-align:center;color:var(--yellow);font-variant-numeric:tabular-nums}
+.timer.low{color:var(--pink)}
+.score{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}
+.score .name{font-weight:700;font-size:15px;overflow-wrap:anywhere}
+.me{color:var(--yellow)}
+.dots{font-size:22px;letter-spacing:.15em;line-height:1}
+.vs{font-family:var(--display);color:var(--dim);font-size:14px}
+.status{font-weight:700;text-align:center;font-size:15px}
+.hands{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.hand{grid-column:span 2;font:inherit;font-weight:700;color:var(--chalk);background:var(--board-3);border:2px solid var(--line);border-radius:14px;padding:12px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:14px}
+.hand .ico{font-size:30px;line-height:1.1}
+.hand.sp{grid-column:span 3}
+.hand.mine .ico{color:var(--yellow)}
+.hand.theirs .ico{color:var(--pink)}
+.hand:hover:not(:disabled){border-color:var(--chalk)}
+.hand:disabled{opacity:.35;cursor:not-allowed}
+.hand.picked{border-color:var(--yellow);opacity:1;background:rgba(241,211,90,.15)}
+.result{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}
+.big{font-family:var(--display);font-size:20px}
+.win{color:var(--yellow)} .lose{color:var(--pink)} .draw{color:var(--sky)}
+.hist{display:flex;flex-direction:column;font-size:14px}
+.hist .h{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px dashed var(--line)}
+.hist .h:last-child{border-bottom:0}
+.tnum{font-variant-numeric:tabular-nums;color:var(--dim);font-size:13px;white-space:nowrap}
+.rule{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--board);border-radius:10px;padding:10px 12px;font-size:14px}
+.chat{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding:4px 0}
+.msg{padding:6px 10px;border-radius:10px;font-size:14px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.j{background:rgba(159,208,232,.14);align-self:flex-start}
+.msg.p{background:rgba(241,211,90,.14);align-self:flex-end}
+.msg small{display:block;color:var(--dim);font-size:11px}
+.logitem{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.banner{font-family:var(--display);font-size:28px;text-align:center;color:var(--yellow)}
+.choice{display:flex;gap:6px;align-items:center;font-size:14px;font-weight:500}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.split{grid-template-columns:1fr}}
+ol.howto{margin:0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+details summary{cursor:pointer;font-weight:700}
+@media (prefers-reduced-motion:no-preference){.pulse{animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{opacity:.55}}}
+</style>
+</head>
+<body>
+<main id="app"><header><h1>特殊手<span>じゃんけん</span></h1></header><div class="card"><p class="dim">準備しています…</p></div></main>
+
+<script type="module">
+/* ================================================================
+   ここにFirebaseの設定を貼り付けてね（Firebaseのコンソールでコピーしたもの）
+   ================================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDoG0lscK06Sw91qt1VQtBCUM9SfEXh-G8",
+  authDomain: "customjyanken.firebaseapp.com",
+  projectId: "customjyanken",
+  storageBucket: "customjyanken.firebasestorage.app",
+  messagingSenderId: "875468336419",
+  appId: "1:875468336419:web:c9774619d8d999f9197096"
+};
+/* ================================================================ */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, limit, addDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const BASIC = {rock:"グー", scissors:"チョキ", paper:"パー"};
+const ICON = {rock:"✊", scissors:"✌️", paper:"✋"};
+const SEATS = {A:"プレイヤーA", B:"プレイヤーB", J:"審判"};
+
+const app = document.getElementById("app");
+let fs = null, authReady = false, setupMissing = !firebaseConfig.apiKey;
+const S = {code:null, game:null, rules:{A:null,B:null}, chat:[], moves:{}, rooms:[], unsub:[], err:"", busy:""};
+const drafts = {};
+let saveTimer = null;
+let transitioning = false;
+
+function ss(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){ return null; } }
+function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){ return null; } }
+let cid = ss("tj_cid");
+if(!cid){ cid = Math.random().toString(36).slice(2) + Date.now().toString(36); ss("tj_cid", cid); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+const other = s => s==="A" ? "B" : "A";
+const nm = (g,s) => (g.seats && g.seats[s] && g.seats[s].name) || SEATS[s];
+function mySeat(){ const g=S.game; if(!g||!g.seats) return null; for(const s of ["A","B","J"]) if(g.seats[s] && g.seats[s].cid===cid) return s; return null; }
+function setErr(m){ S.err=m; render(); }
+function errText(e){ return "うまくいきませんでした" + (e && e.code ? `（${e.code}）` : "") + "。もう一度試してね。"; }
+function handFor(h, me){ if(BASIC[h]) return BASIC[h]; return h==="S"+me ? "自分の特殊手" : "相手の特殊手"; }
+function handIcon(h, me){ if(ICON[h]) return ICON[h]; return h==="S"+me ? "★" : "☆"; }
+function handName(h, g){ if(BASIC[h]) return BASIC[h]; return `${nm(g,h.slice(1))}の特殊手`; }
+function orderText(o,g){ if(o==="A_first") return `${nm(g,"A")}が先に見せる（${nm(g,"B")}が後出し）`; if(o==="B_first") return `${nm(g,"B")}が先に見せる（${nm(g,"A")}が後出し）`; return "同時"; }
+function fmt(sec){ sec=Math.max(0,Math.ceil(sec)); return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0"); }
+
+/* ---------- 起動 ---------- */
+if(!setupMissing){
+  try{
+    const fb = initializeApp(firebaseConfig);
+    fs = getFirestore(fb);
+    const auth = getAuth(fb);
+    onAuthStateChanged(auth, u=>{
+      if(u && !authReady){
+        authReady = true;
+        drafts.name = ls("tj_name") || "";
+        subscribeLobby();
+        const saved = ss("tj_code");
+        if(saved) enterRoom(saved);
+        render();
+      }
+    });
+    signInAnonymously(auth).catch(e=>{ S.err = "Firebaseにつながりませんでした（"+e.code+"）。設定を確認してね。"; render(); });
+  }catch(e){ S.err = "Firebaseの設定が正しくありません。"; }
+}
+render();
+
+function subscribeLobby(){
+  onSnapshot(query(collection(fs,"games"), where("phase","==","lobby"), limit(30)), q=>{
+    const now = Date.now();
+    S.rooms = q.docs.map(d=>d.data()).filter(r=>r.createdAt && now-r.createdAt < 3*3600*1000).sort((a,b)=>b.createdAt-a.createdAt);
+    render();
+  }, ()=>{});
+}
+
+function enterRoom(code){
+  leaveRoom(true);
+  S.code = code; ss("tj_code", code);
+  S.unsub.push(onSnapshot(doc(fs,"games",code), s=>{
+    if(!s.exists()){ if(!s.metadata.fromCache){ leaveRoom(); S.err="その部屋は見つかりませんでした。"; } }
+    else S.game = s.data();
+    render();
+  }, e=>{ S.err = errText(e); render(); }));
+  S.unsub.push(onSnapshot(collection(fs,"games",code,"rules"), q=>{
+    S.rules = {A:null,B:null}; q.docs.forEach(d=>S.rules[d.id]=d.data()); render();
+  }));
+  S.unsub.push(onSnapshot(collection(fs,"games",code,"chat"), q=>{
+    S.chat = q.docs.map(d=>d.data()).sort((a,b)=>a.at-b.at); render();
+  }));
+  S.unsub.push(onSnapshot(collection(fs,"games",code,"moves"), q=>{
+    const m={}; q.docs.forEach(d=>m[d.id]=d.data()); S.moves=m; render();
+  }));
+}
+function leaveRoom(silent){
+  S.unsub.forEach(u=>{ try{u();}catch(e){} });
+  S.unsub=[]; S.code=null; S.game=null; S.rules={A:null,B:null}; S.chat=[]; S.moves={};
+  Object.keys(drafts).forEach(k=>{ if(k!=="name") delete drafts[k]; });
+  if(!silent) ss("tj_code", null);
+}
+
+/* ---------- タイマー（書く時間 → 審判の確認へ） ---------- */
+setInterval(()=>{
+  const g = S.game;
+  if(!g || g.phase!=="writing") return;
+  const left = (g.writingEndsAt - Date.now())/1000;
+  const el = document.getElementById("countdown");
+  if(el){ el.textContent = fmt(left); el.classList.toggle("low", left<=30); }
+  const me = mySeat();
+  if(left <= 2 && (me==="A"||me==="B")) flushRule();
+  const both = S.rules.A && S.rules.A.submitted && S.rules.B && S.rules.B.submitted;
+  if(left <= 0 || both) toReview();
+}, 1000);
+
+async function toReview(){
+  if(transitioning) return;
+  transitioning = true;
+  try{
+    await runTransaction(fs, async tx=>{
+      const ref = doc(fs,"games",S.code);
+      const s = await tx.get(ref);
+      if(s.exists() && s.data().phase==="writing") tx.update(ref, {phase:"review"});
+    });
+  }catch(e){}
+  setTimeout(()=>{ transitioning=false; }, 1500);
+}
+
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushRule, 700);
+}
+async function flushRule(extra){
+  clearTimeout(saveTimer);
+  const me = mySeat(); if(me!=="A" && me!=="B") return;
+  const text = drafts.ruleText != null ? drafts.ruleText : ((S.rules[me]&&S.rules[me].text)||"");
+  const cur = S.rules[me] || {};
+  const patch = {text, at:Date.now()};
+  if(S.game && S.game.phase==="review" && cur.text !== text) patch.approved = false;
+  Object.assign(patch, extra||{});
+  if(cur.text===text && !extra) return;
+  try{ await setDoc(doc(fs,"games",S.code,"rules",me), patch, {merge:true}); }catch(e){ setErr(errText(e)); }
+}
+
+/* ---------- 操作 ---------- */
+const actions = {
+  async create(){
+    const name=(drafts.name||"").trim(); if(!name) return setErr("先に名前を入れてね。");
+    let min = parseFloat(drafts.limitMin || "3"); if(!(min>0)) min=3; min=Math.min(min,30);
+    ls("tj_name",name); S.err=""; S.busy="部屋を作っています…"; render();
+    try{
+      const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let code="";
+      for(let i=0;i<6;i++){ code=Array.from({length:4},()=>chars[Math.floor(Math.random()*chars.length)]).join(""); if(!(await getDoc(doc(fs,"games",code))).exists()) break; }
+      await setDoc(doc(fs,"games",code), {code, createdAt:Date.now(), hostCid:cid, hostName:name, seats:{A:null,B:null,J:null}, phase:"lobby",
+        limitSec:Math.round(min*60), writingEndsAt:0, turn:1, round:1, score:{A:0,B:0}, order:"sim", history:[], winner:null});
+      enterRoom(code);
+    }catch(e){ S.err=errText(e); }
+    S.busy=""; render();
+  },
+  async join(ds){
+    const name=(drafts.name||"").trim(); if(!name) return setErr("先に名前を入れてね。");
+    const code=(ds.code||drafts.joinCode||"").trim().toUpperCase(); if(!code) return setErr("部屋コードを入れてね。");
+    ls("tj_name",name); S.err="";
+    const s = await getDoc(doc(fs,"games",code)).catch(()=>null);
+    if(!s || !s.exists()) return setErr("その部屋は見つかりませんでした。");
+    enterRoom(code);
+  },
+  async sit(ds){
+    const name=(drafts.name||ls("tj_name")||"").trim(); if(!name) return setErr("ロビーで名前を入れてから座ってね。");
+    try{
+      await runTransaction(fs, async tx=>{
+        const ref=doc(fs,"games",S.code); const s=await tx.get(ref); const g=s.data();
+        if(g.phase!=="lobby") throw {code:"started"};
+        if(g.seats[ds.seat]) throw {code:"taken"};
+        const seats={...g.seats};
+        for(const k of ["A","B","J"]) if(seats[k] && seats[k].cid===cid) seats[k]=null;
+        seats[ds.seat]={cid,name};
+        tx.update(ref,{seats});
+      });
+    }catch(e){ setErr(e.code==="taken" ? "その席はもう埋まっています。" : e.code==="started" ? "もう始まっています。" : errText(e)); }
+  },
+  async stand(){
+    const me=mySeat(); if(!me) return;
+    try{ await updateDoc(doc(fs,"games",S.code), {["seats."+me]: null}); }catch(e){ setErr(errText(e)); }
+  },
+  async setLimit(){
+    let min=parseFloat(drafts.limitEdit||""); if(!(min>0)) return setErr("時間を分で入れてね。");
+    try{ await updateDoc(doc(fs,"games",S.code), {limitSec:Math.round(Math.min(min,30)*60)}); }catch(e){ setErr(errText(e)); }
+  },
+  async startWriting(){
+    const g=S.game; if(!g.seats.A||!g.seats.B||!g.seats.J) return setErr("3人そろってから始めてね。");
+    try{ await updateDoc(doc(fs,"games",S.code), {phase:"writing", writingEndsAt:Date.now()+g.limitSec*1000}); }catch(e){ setErr(errText(e)); }
+  },
+  async submitRule(){ await flushRule({submitted:true}); },
+  async sendChat(ds){
+    const me=mySeat(); const thread = me==="J" ? ds.thread : me;
+    const key = me==="J" ? "chat_"+ds.thread : "chat_me";
+    const text=(drafts[key]||"").trim(); if(!text) return;
+    try{ await addDoc(collection(fs,"games",S.code,"chat"), {thread, from:me, text, at:Date.now()}); drafts[key]=""; render(); }catch(e){ setErr(errText(e)); }
+  },
+  async saveRule(){ await flushRule(); },
+  async approve(ds){
+    try{ await setDoc(doc(fs,"games",S.code,"rules",ds.seat), {approved: ds.v==="1"}, {merge:true}); }catch(e){ setErr(errText(e)); }
+  },
+  async startMatch(){
+    if(!(S.rules.A&&S.rules.A.approved&&S.rules.B&&S.rules.B.approved)) return setErr("両方のルールをOKにしてから始めてね。");
+    try{ await updateDoc(doc(fs,"games",S.code), {phase:"playing", turn:1, round:1, score:{A:0,B:0}, order:"sim", history:[],
+      finalRules:{A:S.rules.A.text||"", B:S.rules.B.text||""}}); }catch(e){ setErr(errText(e)); }
+  },
+  async play(ds){
+    const g=S.game, me=mySeat(); if(!g||g.phase!=="playing"||(me!=="A"&&me!=="B")) return;
+    const id="t"+g.turn+me; if(S.moves[id]) return;
+    try{ await setDoc(doc(fs,"games",S.code,"moves",id), {hand:ds.hand, at:Date.now()}); }catch(e){ setErr(errText(e)); }
+  },
+  async decide(ds){
+    const memo=(drafts.memo||"").trim(); const nextOrder=drafts.nextOrder||"sim"; const turnNow=S.game.turn;
+    const a=S.moves["t"+turnNow+"A"], b=S.moves["t"+turnNow+"B"]; if(!a||!b) return;
+    try{
+      await runTransaction(fs, async tx=>{
+        const ref=doc(fs,"games",S.code); const s=await tx.get(ref); const g=s.data();
+        if(g.phase!=="playing"||g.turn!==turnNow) return;
+        const score={...g.score}; if(ds.result!=="draw") score[ds.result]++;
+        const done=score.A>=3||score.B>=3;
+        const entry={turn:g.turn, round:g.round, order:g.order||"sim", moves:{A:a.hand,B:b.hand}, result:ds.result, memo, at:Date.now()};
+        tx.update(ref,{history:[...(g.history||[]),entry], score, turn:g.turn+1, round: ds.result==="draw"?g.round:g.round+1,
+          order: done?"sim":nextOrder, phase: done?"done":"playing", winner: done?(score.A>=3?"A":"B"):null});
+      });
+      drafts.memo=""; drafts.nextOrder="sim"; render();
+    }catch(e){ setErr(errText(e)); }
+  },
+  leave(){ leaveRoom(); S.err=""; render(); },
+  dismiss(){ S.err=""; render(); }
+};
+
+document.addEventListener("click", e=>{
+  const el=e.target.closest("[data-act]"); if(!el||el.disabled) return;
+  const f=actions[el.dataset.act]; if(f) f(el.dataset);
+});
+document.addEventListener("input", e=>{
+  const el=e.target; if(!el.id || el.dataset.draft===undefined) return;
+  drafts[el.id] = el.type==="radio" ? el.value : el.value;
+  if(el.id==="ruleText" && S.game && S.game.phase==="writing") scheduleSave();
+});
+document.addEventListener("change", e=>{
+  const el=e.target; if(el.name==="nextOrder"){ drafts.nextOrder=el.value; }
+});
+
+/* ---------- 画面 ---------- */
+function render(){
+  const ae=document.activeElement; const fid = ae && ae.id && ae.dataset && ae.dataset.draft!==undefined ? ae.id : null;
+  let s1=null,s2=null; if(fid){ try{ s1=ae.selectionStart; s2=ae.selectionEnd; }catch(e){} }
+  const chatScroll = {}; document.querySelectorAll(".chat[id]").forEach(c=>{ chatScroll[c.id] = c.scrollHeight - c.scrollTop - c.clientHeight < 30; });
+  app.innerHTML = view();
+  document.querySelectorAll(".chat[id]").forEach(c=>{ if(chatScroll[c.id]!==false) c.scrollTop=c.scrollHeight; });
+  if(fid){ const el=document.getElementById(fid); if(el){ el.focus(); try{ if(s1!=null) el.setSelectionRange(s1,s2); }catch(e){} } }
+}
+
+function view(){
+  let h=`<header><h1>特殊手<span>じゃんけん</span></h1>${S.code&&S.game?`<div class="row"><span class="chip">部屋 ${esc(S.code)}</span><button class="btn small" data-act="leave">ロビーにもどる</button></div>`:""}</header>`;
+  if(S.err) h+=`<div class="note err row" role="alert"><span style="flex:1">${esc(S.err)}</span><button class="btn small" data-act="dismiss">とじる</button></div>`;
+  if(S.busy) h+=`<div class="note pulse">${esc(S.busy)}</div>`;
+  if(setupMissing) return h+`<div class="card"><h2>設定がまだです</h2><p>このファイルの上のほうにある <code>firebaseConfig</code> に、Firebaseの設定を貼り付けてね。</p></div>`;
+  if(!authReady) return h+`<div class="card"><p class="dim">つないでいます…</p></div>`;
+  if(!S.code) return h+viewLobby();
+  if(!S.game) return h+`<div class="card"><p class="dim">部屋を読み込んでいます…</p></div>`;
+  const g=S.game, me=mySeat();
+  if(g.phase==="lobby") return h+viewSeats(g,me);
+  if(!me && g.phase!=="done") return h+`<div class="card"><h2>この試合は始まっています</h2><p class="dim">新しい部屋を作るか、ほかの部屋に入ってね。</p></div>`;
+  if(g.phase==="writing") return h+viewWriting(g,me);
+  if(g.phase==="review") return h+viewReview(g,me);
+  if(g.phase==="playing") return h+(me==="J"?viewJudgePlay(g):viewPlay(g,me));
+  return h+viewDone(g,me);
+}
+
+function viewLobby(){
+  let h=`<div class="card"><h2>名前</h2><input id="name" data-draft maxlength="12" placeholder="みんなに表示される名前" value="${esc(drafts.name||"")}" autocomplete="off"></div>
+  <div class="card"><h2>部屋を作る</h2>
+    <div class="row"><label for="limitMin">特殊手を考える時間</label><input id="limitMin" data-draft type="number" min="0.5" max="30" step="0.5" value="${esc(drafts.limitMin||"3")}"><span>分</span></div>
+    <div class="row"><button class="btn primary" data-act="create">部屋を作る</button></div></div>
+  <div class="card"><h2>部屋に入る</h2>
+    <div class="row"><input id="joinCode" data-draft maxlength="4" placeholder="部屋コード（4文字）" value="${esc(drafts.joinCode||"")}" autocomplete="off" style="text-transform:uppercase"><button class="btn primary" data-act="join">入る</button></div>`;
+  if(S.rooms.length) h+=`<h3>人を待っている部屋</h3>`+S.rooms.map(r=>{
+    const n=["A","B","J"].filter(s=>r.seats&&r.seats[s]).length;
+    return `<div class="room"><span><b>${esc(r.code)}</b> <span class="dim">${esc(r.hostName||"")}・${n}/3人</span></span><button class="btn small" data-act="join" data-code="${esc(r.code)}">入る</button></div>`;
+  }).join("");
+  h+=`</div><div class="card"><h2>あそびかた</h2><ol class="howto">
+    <li>3人で遊ぶ。プレイヤー2人と審判1人。</li>
+    <li>プレイヤーは決められた時間で、自分だけの特殊手のルールを書く。時間が来たら、書きかけでもそのまま提出になる。</li>
+    <li>審判は両方のルールを読んで、分からないところをプレイヤーに質問する（アドバイスは禁止）。両方OKなら試合開始。</li>
+    <li>手はグー・チョキ・パー・自分の特殊手・相手の特殊手の5種類。先に3勝したら勝ち。あいこはラウンドに数えない。</li>
+    <li>試合中、審判は判定だけ。迷ったらルールを読み直して自分で決める。</li>
+    <li>試合が終わったら、特殊手の正体と全部の記録がみんなに見える。</li></ol>
+    <p class="dim">禁止：出したターンに勝ちが確定する手、強制的にあいこにする手、相手を直接しばる手。どちらのプレイヤーにも同じように働く効果は「場への効果」でOK。</p></div>`;
+  return h;
+}
+
+function viewSeats(g,me){
+  const isHost=g.hostCid===cid;
+  let h=`<div class="card"><h2>部屋 <span class="code">${esc(S.code)}</span></h2><p class="dim">このコードを友達に伝えて、それぞれ席に座ってね。</p>`;
+  for(const s of ["A","B","J"]){
+    const seat=g.seats[s];
+    h+=`<div class="seat"><span><b>${SEATS[s]}</b>：${seat?esc(seat.name)+(seat.cid===cid?"（きみ）":""):`<span class="dim">空いています</span>`}</span>${
+      seat ? (seat.cid===cid?`<button class="btn small" data-act="stand">立つ</button>`:`<span class="chip ok">着席</span>`)
+           : `<button class="btn small" data-act="sit" data-seat="${s}">ここに座る</button>`}</div>`;
+  }
+  h+=`<p class="dim">特殊手を考える時間：${fmt(g.limitSec)}</p>`;
+  if(isHost){
+    h+=`<div class="row"><input id="limitEdit" data-draft type="number" min="0.5" max="30" step="0.5" placeholder="分" value="${esc(drafts.limitEdit||"")}"><button class="btn small" data-act="setLimit">時間を変える</button></div>
+    <div class="row"><button class="btn primary" data-act="startWriting" ${g.seats.A&&g.seats.B&&g.seats.J?"":"disabled"}>3人そろったら：特殊手づくりスタート</button></div>`;
+  } else h+=`<p class="dim">部屋を作った人がスタートを押すと始まります。</p>`;
+  return h+`</div>`;
+}
+
+function viewWriting(g,me){
+  const left=(g.writingEndsAt-Date.now())/1000;
+  let h=`<div class="card"><p class="dim" style="text-align:center">特殊手を考える時間</p><div id="countdown" class="timer ${left<=30?"low":""}">${fmt(left)}</div></div>`;
+  if(me==="J"){
+    h+=`<div class="card"><h2>審判のきみへ</h2><p>プレイヤーが特殊手を書いています。時間が来たら、両方のルールがここに出ます。</p>
+      <div class="seat"><span>${esc(nm(g,"A"))}</span>${S.rules.A&&S.rules.A.submitted?`<span class="chip ok">提出済み</span>`:`<span class="chip wait">書いています</span>`}</div>
+      <div class="seat"><span>${esc(nm(g,"B"))}</span>${S.rules.B&&S.rules.B.submitted?`<span class="chip ok">提出済み</span>`:`<span class="chip wait">書いています</span>`}</div></div>`;
+    return h;
+  }
+  const r=S.rules[me]||{};
+  const val=drafts.ruleText!=null?drafts.ruleText:(r.text||"");
+  h+=`<div class="card"><h2>きみの特殊手</h2>
+    <label for="ruleText">ルール（相手には見えません。書いた分は自動で保存されます）</label>
+    <textarea id="ruleText" data-draft placeholder="例：出したら負け。そのかわり次のターンは後出しできる。" ${r.submitted?"disabled":""}>${esc(val)}</textarea>
+    ${r.submitted?`<p><span class="chip ok">提出しました</span> <span class="dim">相手を待っています。このあと審判と話すときに直せます。</span></p>`
+      :`<div class="row"><button class="btn primary" data-act="submitRule">これで提出</button></div><p class="dim">時間が来たら、書きかけでもそのまま提出になります。</p>`}
+    <p class="dim">相手：${S.rules[other(me)]&&S.rules[other(me)].submitted?"提出済み":"書いています"}</p></div>`;
+  return h;
+}
+
+function chatBox(thread, viewer){
+  const msgs=S.chat.filter(m=>m.thread===thread);
+  const g=S.game;
+  const body=msgs.length?msgs.map(m=>`<div class="msg ${m.from==="J"?"j":"p"}"><small>${m.from==="J"?"審判":esc(nm(g,m.from))}</small>${esc(m.text)}</div>`).join(""):`<p class="dim">まだやりとりはありません。</p>`;
+  const key = viewer==="J" ? "chat_"+thread : "chat_me";
+  return `<div class="chat" id="chatbox_${thread}">${body}</div>
+    <div class="row"><input id="${key}" data-draft placeholder="${viewer==="J"?"質問や指摘を書く":"審判への返事を書く"}" value="${esc(drafts[key]||"")}" autocomplete="off"><button class="btn small" data-act="sendChat" data-thread="${thread}">送る</button></div>`;
+}
+
+function viewReview(g,me){
+  if(me==="J"){
+    let h=`<div class="card"><h2>ルールの確認</h2><p class="dim">矛盾していることや意味の分からないことを質問してね。アドバイスや直し方の提案はしないこと。両方OKにしたら試合を始められます。</p></div>`;
+    for(const s of ["A","B"]){
+      const r=S.rules[s]||{};
+      h+=`<div class="card"><div class="row" style="justify-content:space-between"><h2>${esc(nm(g,s))}の特殊手</h2>${r.approved?`<span class="chip ok">OK</span>`:`<span class="chip wait">確認中</span>`}</div>
+        <div class="rule">${esc(r.text||"（何も書かれていません）")}</div>
+        ${chatBox(s,"J")}
+        <div class="row">${r.approved?`<button class="btn small" data-act="approve" data-seat="${s}" data-v="0">OKを取り消す</button>`:`<button class="btn primary" data-act="approve" data-seat="${s}" data-v="1">このルールでOK</button>`}</div></div>`;
+    }
+    const ok=S.rules.A&&S.rules.A.approved&&S.rules.B&&S.rules.B.approved;
+    h+=`<div class="card"><div class="row"><button class="btn primary" data-act="startMatch" ${ok?"":"disabled"}>試合開始</button></div><p class="dim">試合が始まったら、プレイヤーとは話せなくなります。</p></div>`;
+    return h;
+  }
+  const r=S.rules[me]||{};
+  const val=drafts.ruleText!=null?drafts.ruleText:(r.text||"");
+  const changed = val !== (r.text||"");
+  return `<div class="card"><div class="row" style="justify-content:space-between"><h2>きみの特殊手</h2>${r.approved?`<span class="chip ok">審判OK</span>`:`<span class="chip wait">審判が確認中</span>`}</div>
+    <label for="ruleText">ルール（審判と話して直せます。直すと審判のOKは取り消されます）</label>
+    <textarea id="ruleText" data-draft>${esc(val)}</textarea>
+    <div class="row"><button class="btn small" data-act="saveRule" ${changed?"":"disabled"}>直したルールを保存</button>${changed?`<span class="dim">まだ保存していません</span>`:""}</div></div>
+  <div class="card"><h2>審判とのやりとり</h2>${chatBox(me,me)}</div>
+  <div class="card"><p class="dim">相手のルール：${S.rules[other(me)]&&S.rules[other(me)].approved?"審判OK":"確認中"}。両方OKになったら、審判が試合を始めます。</p></div>`;
+}
+
+function dots(n){ let s=""; for(let i=0;i<3;i++) s+=i<n?"●":"○"; return s; }
+function scoreCard(g, left, right, leftMe){
+  return `<div class="card"><div class="score">
+    <div><div class="name ${leftMe?"me":""}">${esc(nm(g,left))}${leftMe?"（きみ）":""}</div><div class="dots win">${dots(g.score[left])}</div></div>
+    <div class="vs">VS</div>
+    <div><div class="name">${esc(nm(g,right))}</div><div class="dots lose">${dots(g.score[right])}</div></div></div>
+    ${g.phase==="playing"?`<p class="dim" style="text-align:center">ラウンド ${g.round} ・ ターン ${g.turn}${g.order!=="sim"?" ・ "+esc(orderText(g.order,g)):""}</p>`:""}</div>`;
+}
+function resultWord(res, me){ if(res==="draw") return `<span class="draw">あいこ</span>`; return res===me?`<span class="win">勝ち</span>`:`<span class="lose">負け</span>`; }
+
+function viewPlay(g,me){
+  const op=other(me), t=g.turn;
+  const myMove=S.moves["t"+t+me], opMove=S.moves["t"+t+op];
+  const second=(g.order==="A_first"&&me==="B")||(g.order==="B_first"&&me==="A");
+  const first=(g.order==="A_first"&&me==="A")||(g.order==="B_first"&&me==="B");
+  let status, canPick=!myMove;
+  if(myMove&&opMove) status=`<span class="pulse">審判が判定しています…</span>`;
+  else if(myMove) status=`<span class="pulse">相手を待っています</span>`;
+  else if(second&&!opMove){ status=`このターンは相手が先に出します。<span class="pulse">待ってね</span>`; canPick=false; }
+  else if(second&&opMove) status=`相手は「${esc(handFor(opMove.hand,me))}」を出しました。見てから選べるよ（後出し）`;
+  else if(first) status="このターンはきみが先に出す番。相手はきみの手を見てから出します";
+  else status="手を選んでね";
+  const btn=(hand,cls,label)=>{ const p=myMove&&myMove.hand===hand;
+    return `<button class="hand ${cls} ${p?"picked":""}" data-act="play" data-hand="${hand}" ${canPick?"":"disabled"} aria-pressed="${p}"><span class="ico">${handIcon(hand,me)}</span>${label}</button>`; };
+  let h=scoreCard(g,me,op,true)+`<div class="card"><p class="status">${status}</p><div class="hands">
+    ${btn("rock","","グー")}${btn("scissors","","チョキ")}${btn("paper","","パー")}${btn("S"+me,"sp mine","自分の特殊手")}${btn("S"+op,"sp theirs","相手の特殊手")}</div></div>`;
+  const hist=g.history||[];
+  if(hist.length){
+    const L=hist[hist.length-1];
+    h+=`<div class="card"><h2>前のターン</h2><div class="result">
+      <div><div class="dim">きみ</div><div class="big">${handIcon(L.moves[me],me)}</div><div>${esc(handFor(L.moves[me],me))}</div></div>
+      <div class="big">${resultWord(L.result,me)}</div>
+      <div><div class="dim">相手</div><div class="big">${handIcon(L.moves[op],me)}</div><div>${esc(handFor(L.moves[op],me))}</div></div></div></div>
+      <div class="card"><h2>これまで</h2><div class="hist">${hist.slice().reverse().map(e=>`<div class="h"><span class="tnum">T${e.turn}・R${e.round}</span><span>${esc(handFor(e.moves[me],me))} vs ${esc(handFor(e.moves[op],me))}</span><span>${resultWord(e.result,me)}</span></div>`).join("")}</div></div>`;
+  }
+  return h;
+}
+
+function viewJudgePlay(g){
+  const t=g.turn, a=S.moves["t"+t+"A"], b=S.moves["t"+t+"B"];
+  let h=scoreCard(g,"A","B",false);
+  h+=`<div class="card"><h2>ターン ${t} の判定</h2>`;
+  if(!(a&&b)){
+    h+=`<p class="status pulse">手を待っています（${esc(nm(g,"A"))}：${a?"出した":"まだ"}／${esc(nm(g,"B"))}：${b?"出した":"まだ"}）</p>`;
+  } else {
+    const nextO=drafts.nextOrder||"sim";
+    h+=`<div class="result"><div><div class="dim">${esc(nm(g,"A"))}</div><div class="big">${esc(handName(a.hand,g))}</div></div><div class="vs">VS</div><div><div class="dim">${esc(nm(g,"B"))}</div><div class="big">${esc(handName(b.hand,g))}</div></div></div>
+      <label for="memo">判定のメモ（なくてもOK。試合後にみんなに見えます）</label>
+      <input id="memo" data-draft value="${esc(drafts.memo||"")}" placeholder="例：Aの特殊手の効果でパー扱い" autocomplete="off">
+      <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:4px"><legend style="font-weight:700;font-size:14px;margin-bottom:4px">次のターンの出す順（後出しの効果があるときに変える）</legend>
+        ${["sim","A_first","B_first"].map(o=>`<label class="choice"><input type="radio" name="nextOrder" value="${o}" ${nextO===o?"checked":""}> ${esc(orderText(o,g))}</label>`).join("")}</fieldset>
+      <div class="row"><button class="btn primary" data-act="decide" data-result="A">${esc(nm(g,"A"))}の勝ち</button><button class="btn" data-act="decide" data-result="draw">あいこ</button><button class="btn primary" data-act="decide" data-result="B">${esc(nm(g,"B"))}の勝ち</button></div>`;
+  }
+  h+=`<p class="dim">試合中はプレイヤーに話しかけられません。迷ったら下のルールを読み直して、自分で決めてね。</p></div>`;
+  const fr=g.finalRules||{};
+  h+=`<div class="card"><h2>特殊手のルール</h2><div class="split">${["A","B"].map(s=>`<div><h3>${esc(nm(g,s))}の特殊手</h3><div class="rule">${esc(fr[s]||"")}</div></div>`).join("")}</div></div>`;
+  const hist=g.history||[];
+  if(hist.length) h+=`<div class="card"><h2>これまで</h2><div class="hist">${hist.slice().reverse().map(e=>`<div class="h"><span class="tnum">T${e.turn}・R${e.round}</span><span>${esc(handName(e.moves.A,g))} vs ${esc(handName(e.moves.B,g))}</span><span>${e.result==="draw"?`<span class="draw">あいこ</span>`:`<span class="win">${esc(nm(g,e.result))}</span>`}</span></div>`).join("")}</div></div>`;
+  return h;
+}
+
+function viewDone(g,me){
+  let h=`<div class="card"><p class="banner">${g.winner===me?"きみの勝ち！":esc(nm(g,g.winner))+"の勝ち"}</p><p class="dim" style="text-align:center">審判：${esc(nm(g,"J"))}</p></div>`;
+  h+=scoreCard(g,"A","B",me==="A");
+  const fr=g.finalRules||{};
+  h+=`<div class="card"><h2>特殊手の正体</h2>${["A","B"].map(s=>{
+    const msgs=S.chat.filter(m=>m.thread===s);
+    return `<h3>${esc(nm(g,s))}の特殊手</h3><div class="rule">${esc(fr[s]||"")}</div>${msgs.length?`<details><summary>審判とのやりとり（${msgs.length}件）</summary><div class="chat">${msgs.map(m=>`<div class="msg ${m.from==="J"?"j":"p"}"><small>${m.from==="J"?"審判":esc(nm(g,m.from))}</small>${esc(m.text)}</div>`).join("")}</div></details>`:""}`;
+  }).join("")}</div>`;
+  h+=`<div class="card"><h2>試合の記録</h2><div style="display:flex;flex-direction:column;gap:10px">${(g.history||[]).map(e=>`<div class="logitem">
+      <div class="row" style="justify-content:space-between"><span class="tnum">ターン${e.turn}・ラウンド${e.round}${e.order!=="sim"?"・"+esc(orderText(e.order,g)):""}</span><span>${e.result==="draw"?`<span class="draw">あいこ</span>`:`<span class="win">${esc(nm(g,e.result))}の勝ち</span>`}</span></div>
+      <div>${esc(nm(g,"A"))}：${esc(handName(e.moves.A,g))} ／ ${esc(nm(g,"B"))}：${esc(handName(e.moves.B,g))}</div>
+      ${e.memo?`<div class="dim">審判メモ：${esc(e.memo)}</div>`:""}</div>`).join("")}</div></div>
+    <div class="row"><button class="btn primary" data-act="leave">ロビーにもどって次の試合へ</button></div>`;
+  return h;
+}
+</script>
+</body>
+</html>
