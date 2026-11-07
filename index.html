@@ -119,6 +119,7 @@ let fs = null, authReady = false, setupMissing = !firebaseConfig.apiKey;
 const S = {view:"lobby", stock:[], matches:[], friends:[], requests:[], invites:[], profiles:{}, archive:null, recorded:{}, code:null, game:null, rules:{A:null,B:null}, chat:[], moves:{}, rooms:[], unsub:[], err:"", busy:""};
 const drafts = {};
 let saveTimer = null;
+let composing = false, pendingRender = false;
 let transitioning = false;
 
 function ss(k,v){ try{ if(v===undefined) return sessionStorage.getItem(k); v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v); }catch(e){ return null; } }
@@ -529,7 +530,6 @@ document.addEventListener("change", e=>{
 
 /* ---------- 画面 ---------- */
 function clearField(id){ const el=document.getElementById(id); if(el) el.value=""; }
-let composing = false, pendingRender = false;
 document.addEventListener("compositionstart", ()=>{ composing = true; });
 document.addEventListener("compositionend", e=>{
   composing = false;
