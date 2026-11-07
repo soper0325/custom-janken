@@ -116,7 +116,7 @@ const SEATS = {A:"プレイヤーA", B:"プレイヤーB", J:"審判"};
 
 const app = document.getElementById("app");
 let fs = null, authReady = false, setupMissing = !firebaseConfig.apiKey;
-const S = {view:"lobby", matches:[], friends:[], requests:[], invites:[], profiles:{}, archive:null, recorded:{}, code:null, game:null, rules:{A:null,B:null}, chat:[], moves:{}, rooms:[], unsub:[], err:"", busy:""};
+const S = {view:"lobby", stock:[], matches:[], friends:[], requests:[], invites:[], profiles:{}, archive:null, recorded:{}, code:null, game:null, rules:{A:null,B:null}, chat:[], moves:{}, rooms:[], unsub:[], err:"", busy:""};
 const drafts = {};
 let saveTimer = null;
 let transitioning = false;
@@ -136,6 +136,15 @@ function handIcon(h, me){ if(ICON[h]) return ICON[h]; return h==="S"+me ? "★" 
 function handName(h, g){ if(BASIC[h]) return BASIC[h]; return `${nm(g,h.slice(1))}の特殊手`; }
 function orderText(o,g){ if(o==="A_first") return `${nm(g,"A")}が先に見せる（${nm(g,"B")}が後出し）`; if(o==="B_first") return `${nm(g,"B")}が先に見せる（${nm(g,"A")}が後出し）`; return "同時"; }
 function fmt(sec){ sec=Math.max(0,Math.ceil(sec)); return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0"); }
+
+/* ---------- アプリ内ブラウザ対策 ---------- */
+(function(){
+  const ua = navigator.userAgent || "";
+  if(/ Line\//i.test(ua) && !/openExternalBrowser=1/.test(location.search)){
+    const u = new URL(location.href); u.searchParams.set("openExternalBrowser","1"); location.replace(u.toString());
+  }
+})();
+const inAppBrowser = /( Line\/|Instagram|FBAN|FBAV|FB_IAB|Twitter|TikTok|BytedanceWebview|KAKAOTALK)/i.test(navigator.userAgent||"");
 
 /* ---------- 起動・アカウント ---------- */
 let auth = null, account = null, profile = null, lobbyStarted = false;
@@ -188,6 +197,7 @@ function subscribeMine(){
   onSnapshot(collection(fs,"users",u,"matches"), q=>{ S.matches=q.docs.map(d=>d.data()).sort((a,b)=>(b.at||0)-(a.at||0)); render(); }, ()=>{});
   onSnapshot(collection(fs,"users",u,"friends"), q=>{ S.friends=q.docs.map(d=>({uid:d.id,...d.data()})); loadProfiles(S.friends.map(f=>f.uid)); render(); }, ()=>{});
   onSnapshot(collection(fs,"users",u,"friendRequests"), q=>{ S.requests=q.docs.map(d=>({uid:d.id,...d.data()})); render(); }, ()=>{});
+  onSnapshot(collection(fs,"users",u,"stock"), q=>{ S.stock=q.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.at||0)-(a.at||0)); render(); }, ()=>{});
   onSnapshot(collection(fs,"users",u,"invites"), q=>{ S.invites=q.docs.map(d=>({uid:d.id,...d.data()})).filter(i=>Date.now()-(i.at||0)<3*3600*1000); render(); }, ()=>{});
 }
 async function loadProfiles(uids){
@@ -355,7 +365,7 @@ const actions = {
     const me=mySeat(); const thread = me==="J" ? ds.thread : me;
     const key = me==="J" ? "chat_"+ds.thread : "chat_me";
     const text=(drafts[key]||"").trim(); if(!text) return;
-    try{ await addDoc(collection(fs,"games",S.code,"chat"), {thread, from:me, text, at:Date.now()}); drafts[key]=""; render(); }catch(e){ setErr(errText(e)); }
+    try{ await addDoc(collection(fs,"games",S.code,"chat"), {thread, from:me, text, at:Date.now()}); drafts[key]=""; clearField(key); render(); }catch(e){ setErr(errText(e)); }
   },
   async saveRule(){ await flushRule(); },
   async approve(ds){
@@ -366,10 +376,12 @@ const actions = {
     try{ await updateDoc(doc(fs,"games",S.code), {phase:"playing", turn:1, round:1, score:{A:0,B:0}, order:"sim", history:[],
       finalRules:{A:S.rules.A.text||"", B:S.rules.B.text||""}}); }catch(e){ setErr(errText(e)); }
   },
-  async play(ds){
+  pick(ds){ S.pick = {code:S.code, turn:S.game.turn, hand:ds.hand}; render(); },
+  async play(){
     const g=S.game, me=mySeat(); if(!g||g.phase!=="playing"||(me!=="A"&&me!=="B")) return;
+    const p=S.pick; if(!p || p.code!==S.code || p.turn!==g.turn) return;
     const id="t"+g.turn+me; if(S.moves[id]) return;
-    try{ await setDoc(doc(fs,"games",S.code,"moves",id), {hand:ds.hand, at:Date.now()}); }catch(e){ setErr(errText(e)); }
+    try{ await setDoc(doc(fs,"games",S.code,"moves",id), {hand:p.hand, at:Date.now()}); S.pick=null; render(); }catch(e){ setErr(errText(e)); }
   },
   async decide(ds){
     const memo=(drafts.memo||"").trim(); const nextOrder=drafts.nextOrder||"sim"; const turnNow=S.game.turn;
@@ -384,7 +396,7 @@ const actions = {
         tx.update(ref,{history:[...(g.history||[]),entry], score, turn:g.turn+1, round: ds.result==="draw"?g.round:g.round+1,
           order: done?"sim":nextOrder, phase: done?"done":"playing", winner: done?(score.A>=W?"A":"B"):null, endedAt: done?Date.now():null});
       });
-      drafts.memo=""; drafts.nextOrder="sim"; render();
+      drafts.memo=""; drafts.nextOrder="sim"; clearField("memo"); render();
     }catch(e){ setErr(errText(e)); }
   },
   async login(){
@@ -393,10 +405,14 @@ const actions = {
     provider.setCustomParameters({prompt:"select_account"});
     try{ await signInWithPopup(auth, provider); }
     catch(e){
-      if(e && (e.code==="auth/popup-blocked" || e.code==="auth/operation-not-supported-in-this-environment")){
-        try{ await signInWithRedirect(auth, provider); }catch(e2){ setErr(loginErr(e2)); }
-      } else setErr(loginErr(e));
+      if(e && (e.code==="auth/popup-blocked" || e.code==="auth/operation-not-supported-in-this-environment" || e.code==="auth/web-storage-unsupported"))
+        setErr("このアプリの中ではログインできません。右下のコンパスのマークなどから、SafariかChromeで開き直してね。");
+      else setErr(loginErr(e));
     }
+  },
+  async copyUrl(){
+    try{ await navigator.clipboard.writeText(location.origin + location.pathname); S.info="コピーしました。SafariやChromeのアドレスバーに貼り付けて開いてね。"; render(); }
+    catch(e){ setErr("コピーできませんでした。上のURLを長押ししてコピーしてね。"); }
   },
   async logout(){ leaveRoom(); lobbyStarted=false; await signOut(auth); location.reload(); },
   editName(){ drafts.newName = myName(); S.editingName = true; render(); },
@@ -425,6 +441,41 @@ const actions = {
     }catch(e){ S.err = e.code==="not-found" ? "この試合の記録は見つかりませんでした。" : errText(e); }
     S.busy=""; render(); window.scrollTo(0,0);
   },
+  async saveStock(){
+    const text=(drafts.stockText||"").trim();
+    if(!text) return setErr("特殊手のルールを書いてね。");
+    const name=((drafts.stockName||"").trim() || text.slice(0,15)).slice(0,20);
+    try{
+      const ref = S.editStock ? doc(fs,"users",account.uid,"stock",S.editStock) : doc(collection(fs,"users",account.uid,"stock"));
+      await setDoc(ref, {name, text, at:Date.now()});
+      drafts.stockText=""; drafts.stockName=""; clearField("stockText"); clearField("stockName");
+      S.info = S.editStock ? "ストックを更新しました。" : "ストックに保存しました。"; S.editStock=null; render();
+    }catch(e){ setErr(errText(e)); }
+  },
+  editStock(ds){
+    const it=S.stock.find(x=>x.id===ds.id); if(!it) return;
+    S.editStock=it.id; drafts.stockName=it.name; drafts.stockText=it.text; render();
+    const t=document.getElementById("stockName"); if(t) t.value=it.name; const u=document.getElementById("stockText"); if(u) u.value=it.text;
+    window.scrollTo(0,0);
+  },
+  cancelStock(){ S.editStock=null; drafts.stockName=""; drafts.stockText=""; clearField("stockName"); clearField("stockText"); render(); },
+  async deleteStock(ds){
+    if(S.confirmDel!==ds.id){ S.confirmDel=ds.id; render(); return; }
+    try{ await deleteDoc(doc(fs,"users",account.uid,"stock",ds.id)); S.confirmDel=null; }catch(e){ setErr(errText(e)); }
+  },
+  async stockFromMatch(ds){
+    const m=S.matches.find(x=>x.code===ds.code); if(!m||!m.myRule) return;
+    try{
+      await setDoc(doc(collection(fs,"users",account.uid,"stock")), {name:m.myRule.slice(0,15), text:m.myRule, at:Date.now(), from:m.code});
+      S.info="ストックに入れました。名前は「ストック」の画面で変えられます。"; render();
+    }catch(e){ setErr(errText(e)); }
+  },
+  useStock(ds){
+    const it=S.stock.find(x=>x.id===ds.id); if(!it) return;
+    drafts.ruleText=it.text;
+    const el=document.getElementById("ruleText"); if(el) el.value=it.text;
+    flushRule(); render();
+  },
   async sendRequest(){
     const code=(drafts.friendCodeIn||"").trim().toUpperCase();
     if(!code) return setErr("フレンドコードを入れてね。");
@@ -436,7 +487,7 @@ const actions = {
       const target = q.docs[0];
       if(S.friends.some(f=>f.uid===target.id)) return setErr(`${target.data().name}さんとはもうフレンドだよ。`);
       await setDoc(doc(fs,"users",target.id,"friendRequests",account.uid), {name:myName(), at:Date.now()});
-      drafts.friendCodeIn=""; S.info=`${target.data().name}さんにフレンド申請を送りました。`; render();
+      drafts.friendCodeIn=""; clearField("friendCodeIn"); S.info=`${target.data().name}さんにフレンド申請を送りました。`; render();
     }catch(e){ setErr(errText(e)); }
   },
   async acceptReq(ds){
@@ -468,7 +519,8 @@ document.addEventListener("click", e=>{
 });
 document.addEventListener("input", e=>{
   const el=e.target; if(!el.id || el.dataset.draft===undefined) return;
-  drafts[el.id] = el.type==="radio" ? el.value : el.value;
+  drafts[el.id] = el.value;
+  if(e.isComposing) return;
   if(el.id==="ruleText" && S.game && S.game.phase==="writing") scheduleSave();
 });
 document.addEventListener("change", e=>{
@@ -476,13 +528,35 @@ document.addEventListener("change", e=>{
 });
 
 /* ---------- 画面 ---------- */
+function clearField(id){ const el=document.getElementById(id); if(el) el.value=""; }
+let composing = false, pendingRender = false;
+document.addEventListener("compositionstart", ()=>{ composing = true; });
+document.addEventListener("compositionend", e=>{
+  composing = false;
+  const el = e.target;
+  if(el && el.id && el.dataset && el.dataset.draft!==undefined){
+    drafts[el.id] = el.value;
+    if(el.id==="ruleText" && S.game && S.game.phase==="writing") scheduleSave();
+  }
+  if(pendingRender){ pendingRender = false; setTimeout(render, 0); }
+});
 function render(){
-  const ae=document.activeElement; const fid = ae && ae.id && ae.dataset && ae.dataset.draft!==undefined ? ae.id : null;
-  let s1=null,s2=null; if(fid){ try{ s1=ae.selectionStart; s2=ae.selectionEnd; }catch(e){} }
+  // 日本語の変換中は画面を書き換えない（変換が途中で切れるのを防ぐ）
+  if(composing){ pendingRender = true; return; }
+  const ae = document.activeElement;
+  const keep = ae && ae.id && ae.dataset && ae.dataset.draft!==undefined && (ae.tagName==="TEXTAREA" || (ae.tagName==="INPUT" && ae.type!=="radio")) ? ae : null;
   const chatScroll = {}; document.querySelectorAll(".chat[id]").forEach(c=>{ chatScroll[c.id] = c.scrollHeight - c.scrollTop - c.clientHeight < 30; });
   app.innerHTML = view();
   document.querySelectorAll(".chat[id]").forEach(c=>{ if(chatScroll[c.id]!==false) c.scrollTop=c.scrollHeight; });
-  if(fid){ const el=document.getElementById(fid); if(el){ el.focus(); try{ if(s1!=null) el.setSelectionRange(s1,s2); }catch(e){} } }
+  // 入力中の欄は、作り直さずに今の欄をそのまま戻す（カーソル位置がずれない）
+  if(keep){
+    const fresh = document.getElementById(keep.id);
+    if(fresh && fresh.tagName===keep.tagName){
+      keep.disabled = fresh.disabled;
+      fresh.replaceWith(keep);
+      try{ keep.focus({preventScroll:true}); }catch(e){}
+    }
+  }
 }
 
 function view(){
@@ -499,6 +573,7 @@ function view(){
     h+=viewNav();
     if(S.view==="stats") return h+viewStats();
     if(S.view==="friends") return h+viewFriends();
+    if(S.view==="stock") return h+viewStock();
     return h+viewLobby();
   }
   if(!S.game) return h+`<div class="card"><p class="dim">部屋を読み込んでいます…</p></div>`;
@@ -512,6 +587,9 @@ function view(){
 }
 
 function viewLogin(){
+  if(inAppBrowser) return `<div class="card"><p>このアプリの中ではログインできません。SafariかChromeで開いてね。</p>
+    <p class="rule">${esc(location.origin + location.pathname)}</p>
+    <div class="row"><button class="btn primary" data-act="copyUrl">URLをコピー</button></div></div>`;
   return `<div class="card"><div class="row" style="justify-content:center"><button class="btn primary" data-act="login">ログイン</button></div></div>`;
 }
 function viewName(){
@@ -525,7 +603,7 @@ function viewNav(){
   const t=(v,label)=>`<button class="btn small ${S.view===v?"primary":""}" data-act="go" data-view="${v}">${label}</button>`;
   const badge = S.requests.length ? `（${S.requests.length}）` : "";
   return `<div class="card"><div class="row" style="justify-content:space-between"><span>ログイン中：<b>${esc(myName())}</b></span><span class="row"><button class="btn small" data-act="editName">ユーザー名を変える</button><button class="btn small" data-act="logout">ログアウト</button></span></div>
-    <div class="row">${t("lobby","ロビー")}${t("stats","戦績")}${t("friends","フレンド"+badge)}</div></div>`;
+    <div class="row">${t("lobby","ロビー")}${t("stats","戦績")}${t("stock","ストック")}${t("friends","フレンド"+badge)}</div></div>`;
 }
 function fmtDate(t){ const d=new Date(t||0); return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`; }
 function resultChip(r){ return r==="win"?`<span class="chip ok">勝ち</span>`:r==="lose"?`<span class="chip" style="color:var(--pink);border-color:var(--pink)">負け</span>`:`<span class="chip wait">審判</span>`; }
@@ -538,7 +616,23 @@ function viewStats(){
     <div><div class="dim">審判</div><div class="big draw">${j}</div></div></div></div>`;
   h+=`<div class="card"><h2>試合の一覧</h2>${M.length?M.map(m=>`<div class="room"><span><span class="tnum">${fmtDate(m.at)}</span> ${esc(matchVs(m))} <span class="dim">${m.score.A}-${m.score.B}</span></span><span class="row">${resultChip(m.result)}<button class="btn small" data-act="openMatch" data-code="${esc(m.code)}" data-role="${esc(m.role)}">記録</button></span></div>`).join(""):`<p class="dim">まだ試合をしていません。</p>`}</div>`;
   const R=M.filter(m=>m.myRule);
-  h+=`<div class="card"><h2>自分が作った特殊手</h2>${R.length?R.map(m=>`<div><p class="tnum">${fmtDate(m.at)} ・ ${esc(matchVs(m))} ・ ${m.result==="win"?"勝ち":"負け"}</p><div class="rule">${esc(m.myRule)}</div></div>`).join(""):`<p class="dim">まだありません。</p>`}</div>`;
+  h+=`<div class="card"><h2>自分が作った特殊手</h2>${R.length?R.map(m=>{ const saved=S.stock.some(x=>x.text===m.myRule);
+    return `<div style="display:flex;flex-direction:column;gap:6px"><p class="tnum">${fmtDate(m.at)} ・ ${esc(matchVs(m))} ・ ${m.result==="win"?"勝ち":"負け"}</p><div class="rule">${esc(m.myRule)}</div>
+      <div class="row">${saved?`<span class="chip ok">ストック済み</span>`:`<button class="btn small" data-act="stockFromMatch" data-code="${esc(m.code)}">ストックに入れる</button>`}</div></div>`; }).join(""):`<p class="dim">まだありません。</p>`}</div>`;
+  return h;
+}
+function viewStock(){
+  const ed=!!S.editStock;
+  let h=`<div class="card"><h2>${ed?"ストックを編集":"特殊手をストックする"}</h2>
+    <label for="stockName">名前（なくてもOK）</label>
+    <input id="stockName" data-draft maxlength="20" autocorrect="off" autocapitalize="off" spellcheck="false" value="${esc(drafts.stockName||"")}" placeholder="例：後出しの手">
+    <label for="stockText">ルール</label>
+    <textarea id="stockText" data-draft autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="例：出したら負け。そのかわり次のターンは後出しできる。">${esc(drafts.stockText||"")}</textarea>
+    <div class="row"><button class="btn primary" data-act="saveStock">${ed?"更新":"保存"}</button>${ed?`<button class="btn small" data-act="cancelStock">やめる</button>`:""}</div>
+    <p class="dim">ストックした特殊手は、試合の特殊手思考時間に選んで使えます。</p></div>`;
+  h+=`<div class="card"><h2>ストック（${S.stock.length}）</h2>${S.stock.length?S.stock.map(it=>`<div style="display:flex;flex-direction:column;gap:6px;padding:6px 0;border-bottom:1px dashed var(--line)">
+      <h3>${esc(it.name)}</h3><div class="rule">${esc(it.text)}</div>
+      <div class="row"><button class="btn small" data-act="editStock" data-id="${esc(it.id)}">編集</button><button class="btn small" data-act="deleteStock" data-id="${esc(it.id)}">${S.confirmDel===it.id?"本当に消す":"消す"}</button></div></div>`).join(""):`<p class="dim">まだストックがありません。</p>`}</div>`;
   return h;
 }
 function h2h(fid){
@@ -616,10 +710,11 @@ function viewWriting(g,me){
   const val=drafts.ruleText!=null?drafts.ruleText:(r.text||"");
   h+=`<div class="card"><h2>きみの特殊手</h2>
     <label for="ruleText">ルール（相手には見えません。書いた分は自動で保存されます）</label>
-    <textarea id="ruleText" data-draft placeholder="例：出したら負け。そのかわり次のターンは後出しできる。" ${r.submitted?"disabled":""}>${esc(val)}</textarea>
+    <textarea id="ruleText" data-draft autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="例：出したら負け。そのかわり次のターンは後出しできる。" ${r.submitted?"disabled":""}>${esc(val)}</textarea>
     ${r.submitted?`<p><span class="chip ok">提出しました</span> <span class="dim">相手を待っています。このあと審判と話すときに直せます。</span></p>`
       :`<div class="row"><button class="btn primary" data-act="submitRule">これで提出</button></div><p class="dim">時間が来たら、書きかけでもそのまま提出になります。</p>`}
     <p class="dim">相手：${S.rules[other(me)]&&S.rules[other(me)].submitted?"提出済み":"書いています"}</p></div>`;
+  if(!r.submitted && S.stock.length) h+=`<div class="card"><h2>ストックから選ぶ</h2><p class="dim">選ぶと、上の欄に入ります。そのあと書き直してもOK。</p>${S.stock.map(it=>`<div class="seat"><span style="overflow-wrap:anywhere"><b>${esc(it.name)}</b><br><span class="dim">${esc(it.text.length>40?it.text.slice(0,40)+"…":it.text)}</span></span><button class="btn small" data-act="useStock" data-id="${esc(it.id)}">これにする</button></div>`).join("")}</div>`;
   return h;
 }
 
@@ -629,7 +724,7 @@ function chatBox(thread, viewer){
   const body=msgs.length?msgs.map(m=>`<div class="msg ${m.from==="J"?"j":"p"}"><small>${m.from==="J"?"審判":esc(nm(g,m.from))}</small>${esc(m.text)}</div>`).join(""):`<p class="dim">まだやりとりはありません。</p>`;
   const key = viewer==="J" ? "chat_"+thread : "chat_me";
   return `<div class="chat" id="chatbox_${thread}">${body}</div>
-    <div class="row"><input id="${key}" data-draft placeholder="${viewer==="J"?"質問や指摘を書く":"審判への返事を書く"}" value="${esc(drafts[key]||"")}" autocomplete="off"><button class="btn small" data-act="sendChat" data-thread="${thread}">送る</button></div>`;
+    <div class="row"><input id="${key}" data-draft autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="${viewer==="J"?"質問や指摘を書く":"審判への返事を書く"}" value="${esc(drafts[key]||"")}" autocomplete="off"><button class="btn small" data-act="sendChat" data-thread="${thread}">送る</button></div>`;
 }
 
 function viewReview(g,me){
@@ -651,7 +746,7 @@ function viewReview(g,me){
   const changed = val !== (r.text||"");
   return `<div class="card"><div class="row" style="justify-content:space-between"><h2>きみの特殊手</h2>${r.approved?`<span class="chip ok">審判OK</span>`:`<span class="chip wait">審判が確認中</span>`}</div>
     <label for="ruleText">ルール（審判と話して直せます。直すと審判のOKは取り消されます）</label>
-    <textarea id="ruleText" data-draft>${esc(val)}</textarea>
+    <textarea id="ruleText" data-draft autocorrect="off" autocapitalize="off" spellcheck="false">${esc(val)}</textarea>
     <div class="row"><button class="btn small" data-act="saveRule" ${changed?"":"disabled"}>直したルールを保存</button>${changed?`<span class="dim">まだ保存していません</span>`:""}</div></div>
   <div class="card"><h2>審判とのやりとり</h2>${chatBox(me,me)}</div>
   <div class="card"><p class="dim">相手のルール：${S.rules[other(me)]&&S.rules[other(me)].approved?"審判OK":"確認中"}。両方OKになったら、審判が試合を始めます。</p></div>`;
@@ -679,10 +774,12 @@ function viewPlay(g,me){
   else if(second&&opMove) status=`相手は「${esc(handFor(opMove.hand,me))}」を出しました。見てから選べるよ（後出し）`;
   else if(first) status="このターンはきみが先に出す番。相手はきみの手を見てから出します";
   else status="手を選んでね";
-  const btn=(hand,cls,label)=>{ const p=myMove&&myMove.hand===hand;
-    return `<button class="hand ${cls} ${p?"picked":""}" data-act="play" data-hand="${hand}" ${canPick?"":"disabled"} aria-pressed="${p}"><span class="ico">${handIcon(hand,me)}</span>${label}</button>`; };
+  const sel = (S.pick && S.pick.code===S.code && S.pick.turn===t) ? S.pick.hand : null;
+  const btn=(hand,cls,label)=>{ const p = myMove ? myMove.hand===hand : sel===hand;
+    return `<button class="hand ${cls} ${p?"picked":""}" data-act="pick" data-hand="${hand}" ${canPick?"":"disabled"} aria-pressed="${p}"><span class="ico">${handIcon(hand,me)}</span>${label}</button>`; };
   let h=scoreCard(g,me,op,true)+`<div class="card"><p class="status">${status}</p><div class="hands">
-    ${btn("rock","","グー")}${btn("scissors","","チョキ")}${btn("paper","","パー")}${btn("S"+me,"sp mine","自分の特殊手")}${btn("S"+op,"sp theirs","相手の特殊手")}</div></div>`;
+    ${btn("rock","","グー")}${btn("scissors","","チョキ")}${btn("paper","","パー")}${btn("S"+me,"sp mine","自分の特殊手")}${btn("S"+op,"sp theirs","相手の特殊手")}</div>
+    ${canPick?`<div class="row" style="justify-content:center"><button class="btn primary" data-act="play" ${sel?"":"disabled"}>${sel?`「${esc(handFor(sel,me))}」で確定`:"手を選んでから確定"}</button></div><p class="dim" style="text-align:center">確定するまでは選び直せます</p>`:""}</div>`;
   const hist=g.history||[];
   if(hist.length){
     const L=hist[hist.length-1];
@@ -712,7 +809,11 @@ function viewJudgePlay(g){
   }
   h+=`<p class="dim">試合中はプレイヤーに話しかけられません。迷ったら下のルールを読み直して、自分で決めてね。</p></div>`;
   const fr=g.finalRules||{};
-  h+=`<div class="card"><h2>特殊手のルール</h2><div class="split">${["A","B"].map(s=>`<div><h3>${esc(nm(g,s))}の特殊手</h3><div class="rule">${esc(fr[s]||"")}</div></div>`).join("")}</div></div>`;
+  h+=`<div class="card"><h2>特殊手のルール</h2><div class="split">${["A","B"].map(s=>{
+    const msgs=S.chat.filter(m=>m.thread===s);
+    return `<div style="display:flex;flex-direction:column;gap:8px"><h3>${esc(nm(g,s))}の特殊手</h3><div class="rule">${esc(fr[s]||"")}</div>
+      <p class="dim">確認のときのやりとり</p>${msgs.length?`<div class="chat">${msgs.map(m=>`<div class="msg ${m.from==="J"?"j":"p"}"><small>${m.from==="J"?"審判":esc(nm(g,m.from))}</small>${esc(m.text)}</div>`).join("")}</div>`:`<p class="dim">やりとりはありません。</p>`}</div>`;
+  }).join("")}</div></div>`;
   const hist=g.history||[];
   if(hist.length) h+=`<div class="card"><h2>これまで</h2><div class="hist">${hist.slice().reverse().map(e=>`<div class="h"><span class="tnum">T${e.turn}・R${e.round}</span><span>${esc(handName(e.moves.A,g))} vs ${esc(handName(e.moves.B,g))}</span><span>${e.result==="draw"?`<span class="draw">あいこ</span>`:`<span class="win">${esc(nm(g,e.result))}</span>`}</span></div>`).join("")}</div></div>`;
   return h;
